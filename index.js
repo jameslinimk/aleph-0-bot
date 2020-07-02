@@ -5,6 +5,7 @@ const bot = new Discord.Client();
 const randomPuppy = require('random-puppy');
 
 const token = 'NzI2MDY1NDUzNTkxNTYwMjYy.XvYbvw.pOIWVlC-QNw7fqPdxqVyG2GGe0g';
+const botVersion = '1.0'
 
 // Server specific vars
 var prefix = {};
@@ -95,20 +96,19 @@ bot.on('message', msg => {
             .setAuthor(`${bot.name}`, bot.user.displayAvatarURL(), 'https://docs.google.com/document/d/1dKc7qeDap2HtE-KJLnESepEl_nVgJhSyM0LEqNrBBJo/edit?usp=sharing')
             .setDescription(`Preifx: **${prefix[msg.guild.id]}**`)
             .addFields(
-                { name: 'Main commands', value: `\`s.help [<page 1-10>]\`: Shows a certain help page. (Page 1 by default)
+                { name: 'Main commands', value: `\`${prefix[msg.guild.id]}help [<page 1-10>]\`: Shows a certain help page. (Page 1 by default)
                 \\**\`${prefix[msg.guild.id]}tutorial\`\**\: Shows you the basics of the bot
                 \`${prefix[msg.guild.id]}settings\`: Edits the current server settings. (Prefix, etc)
-                \`${prefix[msg.guild.id]}Info\`: Shows bot info. (Version, desc, website, etc)
-                \`${prefix[msg.guild.id]}Invite\`: Shows the bot invite link.
-                \`${prefix[msg.guild.id]}Permslist\`: Lists all of the permissions for each command.
-                \`${prefix[msg.guild.id]}Perms <@user or @role> [<perm>]\`: Gives (or lists) a user / role a permission node(s). (Only owner and users / groups with perm)`},
+                \`${prefix[msg.guild.id]}info\`: Shows bot info. (Version, desc, website, etc)
+                \`${prefix[msg.guild.id]}invite\`: Shows the bot invite link.
+                \`${prefix[msg.guild.id]}permslist\`: Lists all of the permissions for each command.
+                \`${prefix[msg.guild.id]}perms <@user or @role> [<perm>]\`: Gives (or lists) a user / role a permission node(s). (Only owner and users / groups with perm)`},
                 { name: 'Inline field title', value: 'Some value here', inline: true },
                 { name: 'Inline field title', value: 'Some value here', inline: true },
             )
             .addField('Inline field title', 'Some value here', true)
             .setTimestamp()
             .setFooter('Some footer text here', bot.user.displayAvatarURL());
-        
         if (dmHelpCommand[msg.guild.id]){
             msg.author.send(helpEmbed);
             mReply('You have mail! :mailbox:');
@@ -119,6 +119,8 @@ bot.on('message', msg => {
         } else {
             msg.channel.send(helpEmbed);
         };
+    } else if (command === 'tutorial'){
+        mReply('Coming soon!');
     } else if (command === 'settings'){
         if (!args[1]){
             const settingsEmbed = new Discord.MessageEmbed()
@@ -134,61 +136,45 @@ bot.on('message', msg => {
                 .setTimestamp()
                 .setFooter('Some footer text here', bot.user.displayAvatarURL());
             msg.channel.send(settingsEmbed);
-        } else if (args[1] != 'dmHelpComamnd'){
-            
-        }
-    } else if (command === 'reddit'){
-        if (!args[1]){
-            mReply('.... what subreddit');
-            return;
-        }
-        if (args[2]){
-            mReply('One word only pls!');
-            return;
-        }
-        randomPuppy(args[1])
-        .then(url => {
-            mUrl = url.replace(`${url.split('.')[2]}`,'gif');
-            const randomPuppy = new Discord.MessageEmbed()
-                .setColor('#0099ff')
-                .setTitle(`Random r/${args[1]} post!`)
-                .setURL(`${url}`)
-                .setImage(mUrl)
-            msg.channel.send(randomPuppy);
-        });
-    } else if (command === 'memes' || command === 'meme'){
-        randomPuppy('memes')
-        .then(url => {
-            mUrl = url.replace(`${url.split('.')[2]}`,'gif');
-            const randomPuppy = new Discord.MessageEmbed()
-                .setColor('#0099ff')
-                .setTitle(`Random meme!`)
-                .setURL(`${url}`)
-                .setImage(mUrl)
-            msg.channel.send(randomPuppy);
-        });
-    } else if (command === 'cats' || command === 'cat'){
-        randomPuppy('cats')
-        .then(url => {
-            mUrl = url.replace(`${url.split('.')[2]}`,'gif');
-            const randomPuppy = new Discord.MessageEmbed()
-                .setColor('#0099ff')
-                .setTitle(`Random cat!`)
-                .setURL(`${url}`)
-                .setImage(mUrl)
-            msg.channel.send(randomPuppy);
-        });
-    } else if (command === 'puppy'){
-        randomPuppy()
-        .then(url => {
-            mUrl = url.replace(`${url.split('.')[2]}`,'gif');
-            const randomPuppy = new Discord.MessageEmbed()
-                .setColor('#0099ff')
-                .setTitle(`Random puppy!`)
-                .setURL(`${url}`)
-                .setImage(mUrl)
-            msg.channel.send(randomPuppy);
-        });
+        } else if (args[1] === 'dmHelpComamnd'){
+            if (args[2]){
+                mReply('True or false?');
+            } else{
+                if (args[2] != 'true' || args[2] != 'false'){
+                    mReply('The value has to be true or false.');
+                } else {
+                    if (args[2] === 'true'){
+                        if (dmHelpComamnd[msg.guild.id]){
+                            mReply('dmHelpComamnd is already true!');
+                        } else {
+                            mReply('Changed dmHelpComamnd to true!')
+                            dmHelpComamnd[msg.guild.id] = true;
+                        };
+                    } else {
+                        if (!dmHelpComamnd[msg.guild.id]){
+                            mReply('dmHelpComamnd is already false!');
+                        } else {
+                            mReply('Changed dmHelpComamnd to false!');
+                            dmHelpComamnd[msg.guild.id] = false;
+                        };
+                    }
+                };
+            };
+        };
+    } else if (command === 'info'){
+        const indoEmbed = new Discord.MessageEmbed()
+            .setColor('#0099ff')
+            .setTitle(`Sphinx bot info.`)
+            .setURL('https://docs.google.com/document/d/1dKc7qeDap2HtE-KJLnESepEl_nVgJhSyM0LEqNrBBJo/edit?usp=sharing')
+            .setAuthor(`${bot.name}`, bot.user.displayAvatarURL(), 'https://docs.google.com/document/d/1dKc7qeDap2HtE-KJLnESepEl_nVgJhSyM0LEqNrBBJo/edit?usp=sharing')
+            .setDescription(`\`Version\`: ${botVersion}`)
+            .addFields(
+                { name: 'Main commands', value: `\`dmHelpCommand\`: Will the bot DM help commands? (True / False)`},
+            )
+            .addField('Inline field title', 'Some value here', true)
+            .setTimestamp()
+            .setFooter('Some footer text here', bot.user.displayAvatarURL());
+        msg.channel.send(indoEmbed);
     } else if (command === 'search'){
         if (!args[1]){
             mReply('... Search what?');
@@ -222,5 +208,57 @@ bot.on('message', msg => {
     };
 });
 
-
 bot.login(token);
+
+    // } else if (command === 'reddit'){
+    //     if (!args[1]){
+    //         mReply('.... what subreddit');
+    //         return;
+    //     }
+    //     if (args[2]){
+    //         mReply('One word only pls!');
+    //         return;
+    //     }
+    //     randomPuppy(args[1])
+    //     .then(url => {
+    //         mUrl = url.replace(`${url.split('.')[2]}`,'gif');
+    //         const randomPuppy = new Discord.MessageEmbed()
+    //             .setColor('#0099ff')
+    //             .setTitle(`Random r/${args[1]} post!`)
+    //             .setURL(`${url}`)
+    //             .setImage(mUrl)
+    //         msg.channel.send(randomPuppy);
+    //     });
+    // } else if (command === 'memes' || command === 'meme'){
+    //     randomPuppy('memes')
+    //     .then(url => {
+    //         mUrl = url.replace(`${url.split('.')[2]}`,'gif');
+    //         const randomPuppy = new Discord.MessageEmbed()
+    //             .setColor('#0099ff')
+    //             .setTitle(`Random meme!`)
+    //             .setURL(`${url}`)
+    //             .setImage(mUrl)
+    //         msg.channel.send(randomPuppy);
+    //     });
+    // } else if (command === 'cats' || command === 'cat'){
+    //     randomPuppy('cats')
+    //     .then(url => {
+    //         mUrl = url.replace(`${url.split('.')[2]}`,'gif');
+    //         const randomPuppy = new Discord.MessageEmbed()
+    //             .setColor('#0099ff')
+    //             .setTitle(`Random cat!`)
+    //             .setURL(`${url}`)
+    //             .setImage(mUrl)
+    //         msg.channel.send(randomPuppy);
+    //     });
+    // } else if (command === 'puppy'){
+    //     randomPuppy()
+    //     .then(url => {
+    //         mUrl = url.replace(`${url.split('.')[2]}`,'gif');
+    //         const randomPuppy = new Discord.MessageEmbed()
+    //             .setColor('#0099ff')
+    //             .setTitle(`Random puppy!`)
+    //             .setURL(`${url}`)
+    //             .setImage(mUrl)
+    //         msg.channel.send(randomPuppy);
+    //     });
