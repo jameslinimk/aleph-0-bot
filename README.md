@@ -1,4 +1,4 @@
-# Sphinx bot
+# Strawberry bot
 
 1: Do not resell / claim as own
 
