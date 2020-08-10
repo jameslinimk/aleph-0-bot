@@ -1,18 +1,27 @@
-const Discord = require('discord.js'); // Gets The Discord.js Package
-const fs = require("fs"); // Gets the fs Package
-const bot = new Discord.Client(); // Our Discord Client defined as bot
-var randomImageJs = require('random-image-js');
-// const Canvas = require('canvas');
+// Modules:
+const fs = require("fs");
+const Discord = require('discord.js');
+const bot = new Discord.Client();
 const Canvas = require("discord-canvas");
+const randomImageJs = require('random-image-js');
+const db = require('quick.db');
 
-var config = require('./storages/config.json');
-var guildConf = require('./storages/guildConf.json');
-var guildBlacklists = require('./storages/guildBlacklists.json');
+// Databses:
+const config = require('./storages/config.json');
+const guildConf = require('./storages/guildConf.json');
+const guildBlacklists = require('./storages/guildBlacklists.json');
+const snipes = {};
 const quiz = require('./storages/quiz.json');
 
+// Other:
 const talkedRecently = new Set();
+const banned = new Set();
+const availableCommands = ['number', 'pp', 'coin', '8ball', 'prefix', 'goodbye', 'welcome', 'blacklist', 'snipe', 'info', 'ping', 'serverinfo', 'whois', 'purge', 'kill', 'dad', 'quiz', 'jfgi', 'justgoogleit', 'anime', 'hentai', 'cat', 'porn', 'dog', 'memes', 'cute', 'reddit', 'help', 'enable', 'disable', 'disabled', 'commands', 'dad', 'antilinks'];
+const botVersion = 'BETA v0.01';
 
-const botVersion = '1.0';
+// Add banned users:
+const bannedList = [];
+bannedList.forEach(item => banned.add(item));
 
 bot.on('ready', () => {
     console.log('=======================');
@@ -33,25 +42,24 @@ bot.on('ready', () => {
     .catch(console.error);
 });
 
-bot.on('guildCreate', (guild) => { // If the Bot was added on a server, proceed
-    if (!guildConf[guild.id]) { // If the guild's id is not on the GUILDCONF File, proceed
+bot.on('guildCreate', (guild) => {
+    if (!guildConf[guild.id]) {
 	guildConf[guild.id] = {
         prefix: config.prefix,
-        welcomeImage: false, // Background image color
-        welcomeImageURL: false, // Background image URL
         welcomeChannelID: false, // Welcome image channel ID
-        goodbyeImage: false, // Background image color
-        goodbyeImageURL: false, // Background image URL
         goodbyeChannelID: false, // Goodbye image channel ID
         welcomeMessage: false, // Welcome message. ( If not false, then true )
-        goodbyeMessage: false // Goodbye message. ( If not false, then true )
+        goodbyeMessage: false, // Goodbye message. ( If not false, then true )
+        disabled: [],
+        dad: false,
+        links: true
 	}
     }
      fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
      	if (err) console.log(err)
     })
 
-    if (!guildBlacklists[guild.id]) { // If the guild's id is not on the GUILDCONF File, proceed
+    if (!guildBlacklists[guild.id]) {
     guildBlacklists[guild.id] = {
         blacklist: []
     }
@@ -64,321 +72,331 @@ bot.on('guildCreate', (guild) => { // If the Bot was added on a server, proceed
     welcomeChannel.send("Thanks for invite me!\nDo `s!prefix <New prefix>` to change my prefix and `s!help` for more info!")
 });
 
-
-bot.on('guildDelete', (guild) => { // If the Bot was removed on a server, proceed
-     delete guildConf[guild.id]; // Deletes the Guild ID and Prefix
+bot.on('guildDelete', (guild) => {
+     delete guildConf[guild.id];
      fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
      	if (err) console.log(err)
     })
 
-    delete guildBlacklists[guild.id]; // Deletes the Guild ID and Prefix
+    delete guildBlacklists[guild.id];
     fs.writeFile('./storages/guildBlacklists.json', JSON.stringify(guildBlacklists, null, 2), (err) => {
         if (err) console.log(err)
    })
 });
 
+bot.on("messageDelete", (message) => {
+    snipes[message.channel.id] = {
+        content: message.content,
+        author: message.member
+    };
+
+    setTimeout(() => {
+        delete snipes[message.channel.id];
+    }, 60000);
+});
+
 bot.on('guildMemberAdd', async member => {
     if (guildConf[member.guild.id].welcomeChannelID != false){
-        const channel = member.guild.channels.cache.find(ch => ch.id === `${guildConf[member.guild.id].welcomeChannelID}`).catch((error) =>{
-            const errorChannel = guild.channels.cache.find(channel => channel.type === 'text' && channel.permissionsFor(guild.me).has('SEND_MESSAGES'))
-            errorChannel.send("Error with sending welcomes. Please check the ID and try again!")
-        });
+        const channel = member.guild.channels.cache.find(ch => ch.id === `${guildConf[member.guild.id].welcomeChannelID}`)
         if (guildConf[member.guild.id].welcomeMessage != false){
             let message = guildConf[member.guild.id].welcomeMessage;
             message = message.replace(new RegExp('{mention}', 'g'), `${member}`);
             message = message.replace(new RegExp('{server}', 'g'), `${member.guild.name}`);
             message = message.replace(new RegExp('{discriminator}', 'g'), `${member.user.discriminator}`);
             message = message.replace(new RegExp('{name}', 'g'), `${member.displayName}`);
-            channel.send(`${message}`, attachment).catch((error) => {
+            channel.send(`${message}`).catch((error) => {
                 channel.send('**ERROR** **PLEASE CHANGE MESSAGE** **ERROR**')
                 channel.send(`Error (Please send to DEV): \`\`\`js\n${error}\`\`\``)
             });
         };
-
-        // Add if welcomeImage then send image with Welcome image URL
-
     };
-    welcomeCanvas = new Canvas.Welcome();
-    let image = await welcomeCanvas
-      .setUsername(`${member.displayName}`)
-      .setDiscriminator(`${member.user.discriminator}`)
-      .setMemberCount(`${member.guild.members.cache.filter(member => !member.user.bot).size}`)
-      .setGuildName(`${member.guild.name}`)
-      .setAvatar(member.user.displayAvatarURL({ format: 'jpg' }))
-      .setColor("border", "#8015EA")
-      .setColor("username-box", "#8015EA")
-      .setColor("discriminator-box", "#8015EA")
-      .setColor("message-box", "#8015EA")
-      .setColor("title", "#8015EA")
-      .setColor("avatar", "#8015EA")
-      .setBackground('https://discordjs.guide/assets/img/8CQvVRV.cced9193.png')
-      .toAttachment();
-    
-    let attachment = new Discord.MessageAttachment(image.toBuffer(), "welcome-image.png");
-
-    const channel = member.guild.channels.cache.find(ch => ch.name === 'member-log');
 });
 
-bot.on('message', message => {
-	if (message.content === '!join') {
-		bot.emit('guildMemberAdd', message.member);
-	}
+bot.on('guildMemberRemove', async member => {
+    if (guildConf[member.guild.id].goodbyeChannelID != false){
+        const channel = member.guild.channels.cache.find(ch => ch.id === `${guildConf[member.guild.id].goodbyeChannelID}`);
+        if (guildConf[member.guild.id].goodbyeMessage != false){
+            let message = guildConf[member.guild.id].goodbyeMessage;
+            message = message.replace(new RegExp('{mention}', 'g'), `${member}`);
+            message = message.replace(new RegExp('{server}', 'g'), `${member.guild.name}`);
+            message = message.replace(new RegExp('{discriminator}', 'g'), `${member.user.discriminator}`);
+            message = message.replace(new RegExp('{name}', 'g'), `${member.displayName}`);
+            channel.send(`${message}`).catch((error) => {
+                channel.send('**ERROR** **PLEASE CHANGE MESSAGE** **ERROR**')
+                channel.send(`Error (Please send to DEV): \`\`\`js\n${error}\`\`\``)
+            });
+        };
+    };
 });
 
 bot.on('message', async message => {
-    if (message.channel.type === "dm" || message.author.bot || message.author === bot.user) return; // Checks if we're on DMs, or the Author is a Bot, or the Author is our Bot, stop.
-    var args = message.content.split(' ').slice(1); // We need this later
-    var command = message.content.split(' ')[0].replace(guildConf[message.guild.id].prefix, ''); // Replaces the Current Prefix with this
-
-    if (!message.content.startsWith(guildConf[message.guild.id].prefix)) return;
-
-    if (command === 'cat'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-
-            const cat = await randomImageJs.getMemes({ 
-                get: 1, 
-                removeAllSubReddit: true, 
-                addSubReddit: ['cats', 'Catswhoyell', 'sleepingcats'] 
-            });
-            var randomColor = Math.floor(Math.random()*16777215).toString(16);
-            const catEmbed = new Discord.MessageEmbed()
-            .setTitle(`${cat[0].title}`)
-            .setURL(`${cat[0].postLink}`)
-            .setImage(`${cat[0].image}`)
-            .setColor(`#${randomColor}`)
-            .setFooter(`Sub: ${cat[0].subreddit} | NSFW: ${cat[0].NSFW}`)
-            message.channel.send(catEmbed)
-
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-    };
-
-    if (command === 'dog'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-            const dog = await randomImageJs.getMemes({ 
-                get: 1, 
-                removeAllSubReddit: true, 
-                addSubReddit: ['dog'] 
-            });
-            var randomColor = Math.floor(Math.random()*16777215).toString(16);
-            const dogEmbed = new Discord.MessageEmbed()
-            .setTitle(`${dog[0].title}`)
-            .setURL(`${dog[0].postLink}`)
-            .setImage(`${dog[0].image}`)
-            .setColor(`#${randomColor}`)
-            .setFooter(`Sub: ${dog[0].subreddit} | NSFW: ${dog[0].NSFW}`)
-            message.channel.send(dogEmbed)
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            // Removes the user from the set after a minute
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-    };
-
-    if (command === 'memes' || command === 'meme' || command === 'dankmemes' || command === 'dankmeme'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-            const meme = await randomImageJs.getMemes({ 
-                get: 1, 
-                removeAllSubReddit: true, 
-                addSubReddit: ['memes', 'dankmemes'] 
-            });
-            var randomColor = Math.floor(Math.random()*16777215).toString(16);
-            const memeEmbed = new Discord.MessageEmbed()
-            .setTitle(`${meme[0].title}`)
-            .setURL(`${meme[0].postLink}`)
-            .setImage(`${meme[0].image}`)
-            .setColor(`#${randomColor}`)
-            .setFooter(`Sub: ${meme[0].subreddit} | NSFW: ${meme[0].NSFW}`)
-            message.channel.send(memeEmbed)
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            // Removes the user from the set after a minute
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-    };
-
-    if (command === 'anime'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-            const anime = await randomImageJs.getMemes({ 
-                get: 1, 
-                removeAllSubReddit: true, 
-                addSubReddit: ['anime'] 
-            });
-            var randomColor = Math.floor(Math.random()*16777215).toString(16);
-            const animeEmbed = new Discord.MessageEmbed()
-            .setTitle(`${anime[0].title}`)
-            .setURL(`${anime[0].postLink}`)
-            .setImage(`${anime[0].image}`)
-            .setColor(`#${randomColor}`)
-            .setFooter(`Sub: ${anime[0].subreddit} | NSFW: ${anime[0].NSFW}`)
-            message.channel.send(animeEmbed)
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            // Removes the user from the set after a minute
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-    };
-
-    if (command === 'reddit'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-
-            if (!args[0]){
-                message.channel.send('What subreddit?');
-            } else {
-                const reddit = await randomImageJs.getMemes({ 
-                    get: 1, 
-                    removeAllSubReddit: true, 
-                    addSubReddit: [`${args[0]}`] 
-                }).catch(error => {
-                    message.channel.send('Took too long! Try again with another subreddit!');
-                    return;
-                });
-                if (reddit[0].NSFW){
-                    if (message.channel.nsfw === true){
-    
-                        const redditEmbed = new Discord.MessageEmbed()
-                        .setTitle(`${reddit[0].title}`)
-                        .setURL(`${reddit[0].postLink}`)
-                        .setImage(`${reddit[0].image}`)
-                        .setColor('RANDOM')
-                        .setFooter(`Sub: ${reddit[0].subreddit} | NSFW: ${reddit[0].NSFW}`)
-                        message.channel.send(redditEmbed)
-    
-                    } else {
-                        message.channel.send(':warning: This channel isn\'t nsfw!');
-                        message.channel.send('https://support.discord.com/hc/article_attachments/360007795191/2_.jpg');
-                    };
-                } else {
-    
-                    var randomColor = Math.floor(Math.random()*16777215).toString(16);
-                    const redditEmbed = new Discord.MessageEmbed()
-                    .setTitle(`${reddit[0].title}`)
-                    .setURL(`${reddit[0].postLink}`)
-                    .setImage(`${reddit[0].image}`)
-                    .setColor(`#${randomColor}`)
-                    .setFooter(`Sub: ${reddit[0].subreddit} | NSFW: ${reddit[0].NSFW}`)
-                    message.channel.send(redditEmbed).catch((error) => {
-                        message.channel.send(`\`\`\`js\n${error}\`\`\``);
-                    })
-    
-                };
-            };
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            // Removes the user from the set after a minute
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-    };
-
-    if (command === 'hentai'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-            if (message.channel.nsfw === true){
-                const hentai = await randomImageJs.getMemes({ 
-                    get: 1, 
-                    removeAllSubReddit: true, 
-                    addSubReddit: ['hentai'] 
-                });
-                var randomColor = Math.floor(Math.random()*16777215).toString(16);
-                const hentaiEmbed = new Discord.MessageEmbed()
-                .setTitle(`${hentai[0].title}`)
-                .setURL(`${hentai[0].postLink}`)
-                .setImage(`${hentai[0].image}`)
-                .setColor(`#${randomColor}`)
-                .setFooter(`Sub: ${hentai[0].subreddit} | NSFW: ${hentai[0].NSFW}`)
-                message.channel.send(hentaiEmbed)
-            } else {
-                message.channel.send(':warning: This channel isn\'t nsfw!');
-                message.channel.send('https://support.discord.com/hc/article_attachments/360007795191/2_.jpg');
-            };
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            // Removes the user from the set after a minute
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-
-    };
-
-    if (command === 'porn' || command === 'porno'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-
-            if (message.channel.nsfw === true){
-                const porn = await randomImageJs.getMemes({ 
-                    get: 1, 
-                    removeAllSubReddit: true, 
-                    addSubReddit: ['porn', 'porno'] 
-                });
-                var randomColor = Math.floor(Math.random()*16777215).toString(16);
-                const pornEmbed = new Discord.MessageEmbed()
-                .setTitle(`${porn[0].title}`)
-                .setURL(`${porn[0].postLink}`)
-                .setImage(`${porn[0].image}`)
-                .setColor(`#${randomColor}`)
-                .setFooter(`Sub: ${porn[0].subreddit} | NSFW: ${porn[0].NSFW}`)
-                message.channel.send(pornEmbed)
-            } else {
-                message.channel.send(':warning: This channel isn\'t nsfw!');
-                message.channel.send('https://support.discord.com/hc/article_attachments/360007795191/2_.jpg');
-            };
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            // Removes the user from the set after a minute
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-
-    };
-})
-
-bot.on('message', (message) => {
-    if (message.channel.type === "dm" || message.author.bot || message.author === bot.user) return; // Checks if we're on DMs, or the Author is a Bot, or the Author is our Bot, stop.
-    var args = message.content.split(' ').slice(1); // We need this later
-    var command = message.content.split(' ')[0].replace(guildConf[message.guild.id].prefix, ''); // Replaces the Current Prefix with this
-
+	var msg = message.content.toLowerCase();
+    if (message.channel.type === "dm" || message.author.bot || message.author === bot.user) return;
+    var args = msg.split(' ').slice(1);
+    var command = msg.split(' ')[0].replace(guildConf[message.guild.id].prefix, '');
+	
     if (message.mentions.has(bot.user)){
-        message.channel.send(`My prefix is \`${guildConf[message.guild.id].prefix}\`\nDo \`${guildConf[message.guild.id].prefix}help\` for help.`)
+        message.channel.send(`My prefix is \`${guildConf[message.guild.id].prefix}\`\nDo \`${guildConf[message.guild.id].prefix}help\` for help.`);
     };
-    
-    let blacklist = guildBlacklists[message.guild.id].blacklist;
 
+    let blacklist = guildBlacklists[message.guild.id].blacklist;
     var i;
     for (i = 0; i < blacklist.length; i++) {
         if (!message.member.hasPermission('MANAGE_GUILD')){
             if (message.content.includes(`${blacklist[i]}`)){
                 message.reply('don\'t say that word!');
-                message.author.send(`Don\'t say \`${blacklist[i]}\` in \`${message.guild.name}\`!`)
-            }
-        }
-    }
+                message.author.send(`Don\'t say \`${blacklist[i]}\` in \`${message.guild.name}\`!`);
+            };
+        };
+    };
 
-    if (!message.content.startsWith(guildConf[message.guild.id].prefix)) return;
+    if (msg.startsWith('im')) if (guildConf[message.guild.id].dad) return message.channel.send(`Hi${msg.replace('im','')}, im Dad!`);
 
-    if (command === 'blacklist'){
-        if (talkedRecently.has(msg.author.id)) {
-            msg.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+    if (!guildConf[message.guild.id].links && !message.member.hasPermission('MANAGE_GUILD')){
+        if (msg.includes("https://")) {
+            message.delete();
+            message.channel.send("No links here, " + message.member);
+        };
+        if (msg.includes("http://")) {
+            message.delete();
+            message.channel.send("No links here, " + message.member);
+        };
+        if (msg.includes("www.")) {
+            message.delete();
+            message.channel.send("No links here, " + message.member);
+        };
+    };
+
+    if (!msg.startsWith(guildConf[message.guild.id].prefix)) return;
+	
+	var cooldownTime = 5000;
+	function cooldownMessage(m){
+		const cooldownEmbed = new Discord.MessageEmbed()
+		.setColor('RANDOM')
+		.setTitle('Please wait')
+		.setDescription(`${m} please wait 5 seconds untill executing another command!`)
+		.setFooter(`Bot created by 𝐙𝐞𝐫𝐨 𝐭𝐰𝐨#0265 | Currently in ${bot.guilds.cache.size} servers`);
+        message.channel.send(cooldownEmbed);
+    };
+
+    var i;
+    for (i = 0; i < guildConf[message.guild.id].disabled.length; i++) {
+        if (command === guildConf[message.guild.id].disabled[i]){
+            return;
+        };
+    };
+
+    if (banned.has(message.author.id)) return message.reply('ok banned person.');
+
+    if (command === 'help'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
         } else {
 
+            if (!args[0]){
+                var commandList = '`' + availableCommands.toString().replace(new RegExp(',', 'g'), '`, `') + '`';
+                const helpEmbed = new Discord.MessageEmbed()
+                .setColor('#0099ff')
+                .setAuthor('Command list', bot.user.avatarURL())
+                .setDescription(`**Type \`${guildConf[message.guild.id].prefix}help <command>\` for more info about that command.**
+    
+[Add me to your server!](https://discordapp.com/oauth2/authorize?client_id=726065453591560262&scope=bot&permissions=8)
+[Join the Strawberry server!](https://discord.gg/kEnspZc) (updates, bug reports, support and more)`)
+                .addFields(
+                    { name: 'Random:', value: '\`number\`, \`pp\`, \`coin\`, \`8ball\`', inline: true },
+                    { name: 'Reddit:', value: '\`anime\`, \`reddit\`, \`meme\`, \`porn\`, \`dog\`, \`memes\`, \`cute\`', inline: true },
+                    { name: 'Fun:', value: '\`kill\`, \`dad\`, \`quiz\`, \`justgoogleit\`', inline: true },
+                    { name: 'Utility:', value: '\`snipe\`, \`info\`, \`ping\`, \`serverinfo\`, \`whois\`, \`purge\`, \`commands\`', inline: true },
+                    { name: 'Settings:', value: '\`blacklist\`, \`welcome\`, \`goodbye\`, \`prefix\`, \`disabled\`, \`disable\`, \`enable\`, `dad`, `antilinks`', inline: true },
+                    { name: 'All commands:', value: commandList, inline: false},
+                )
+                .setFooter(`Bot created by 𝐙𝐞𝐫𝐨 𝐭𝐰𝐨#0265 | Currently in ${bot.guilds.cache.size} servers`);
+                message.channel.send(helpEmbed);
+            } else {
+                if (args[0] === 'number'){
+                    message.channel.send('**Number command**\nGives you a random number between 0 and <args>');
+                } else if (args[0] === 'pp'){
+                    message.channel.send('**Coin command**\nFlips a coin. Duh')
+                } else if (args[0] === 'coin'){
+                    message.channel.send('**Coin command**\nFlips a coin. Duh')
+                } else if (args[0] === '8ball'){
+                    message.channel.send('**Coin command**\nFlips a coin. Duh')
+                } else if (args[0] === 'Goodbye'){
+                    message.channel.send('**Coin command**\nFlips a coin. Duh')
+                } else if (args[0] === 'Welcome'){
+                    message.channel.send('**Coin command**\nFlips a coin. Duh')
+                } else if (args[0] === 'Blacklist'){
+                    message.channel.send('**Coin command**\nFlips a coin. Duh')
+                } else if (args[0] === 'coin'){
+                    message.channel.send('**Coin command**\nFlips a coin. Duh')
+                } else if (args[0] === 'coin'){
+                    message.channel.send('**Coin command**\nFlips a coin. Duh')
+                } else {
+                    message.channel.send('Invalid command!')
+                }
+            };
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+				talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+        };
+    };
+
+    if (command === 'commands'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+        var commandList = '`' + availableCommands.toString().replace(new RegExp(',', 'g'), '`, `') + '`';
+            message.channel.send('**All commands:** ' + commandList);
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+                talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+        }
+    };
+
+    if (command === 'disabled'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            var commandList = '`' + guildConf[message.guild.id].disabled.toString().replace(new RegExp(',', 'g'), '`, `') + '`';
+            message.channel.send('**Disabled commands:** ' + commandList);
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+                talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+        }
+    };
+
+    if (command === 'disable'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            if (!args[0]) return message.channel.send(`What commands are you adding? Do \`${guildConf[message.guild.id].prefix}commands\` for all of the commands!`);
+
+            var i;
+            for (i = 0; i < availableCommands.length; i++) {
+                if (args[0] === availableCommands[i]){
+                    guildConf[message.guild.id].disabled.push(args[0]);
+                    let unique = [...new Set(guildConf[message.guild.id].disabled)];
+                    guildConf[message.guild.id].disabled = Array.from(unique);
+                    fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                        if (err) console.log(err);
+                    });
+                    message.channel.send(`Added \`${args[0]}\` to the disabled commands!`);
+                    return;
+                };
+            };
+            message.channel.send('Invalid command! ' + `Do \`${guildConf[message.guild.id].prefix}commands\` for all of the commands!`);
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+				talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+		
+		};
+    };
+
+    if (command === 'enable'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            if (args[0]){
+                let value = args[0];
+                var i;
+                for (i = 0; i < guildConf[message.guild.id].disabled.length; i++) {
+                    if (args[0] === guildConf[message.guild.id].disabled[i]){
+                        guildConf[message.guild.id].disabled = guildConf[message.guild.id].disabled.filter(item => item !== value);
+                        message.channel.send(`Removed \`${args[0]}\` from the disabled commands!`);
+                        fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                            if (err) console.log(err);
+                        });
+                        talkedRecently.add(message.author.id);
+                        setTimeout(() => {
+                            talkedRecently.delete(message.author.id);
+                        }, cooldownTime);
+                        return;
+                    };
+                };
+                message.channel.send('Imagine tryin to enable a command that\'s not disabled **lmao**.');
+            } else {
+                message.channel.send('Imagine tryin to enable nothing.');
+            };
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+				talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+		
+		}
+    };
+
+    if (command === 'dad'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            if (guildConf[message.guild.id].dad){
+                guildConf[message.guild.id].dad = false;
+                message.channel.send('Dad left to go get the milk. ( Disabled )');
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err);
+                });
+                talkedRecently.add(message.author.id);
+                setTimeout(() => {
+                    talkedRecently.delete(message.author.id);
+                }, cooldownTime);
+                return;
+            };
+            if (!guildConf[message.guild.id].dad){
+                guildConf[message.guild.id].dad = true;
+                message.channel.send('Dad came back and he is feeling super corny');
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err);
+                });
+                talkedRecently.add(message.author.id);
+                setTimeout(() => {
+                    talkedRecently.delete(message.author.id);
+                }, cooldownTime);
+                return;
+            };
+		
+		}
+    };
+
+    if (command === 'antilinks'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            if (guildConf[message.guild.id].links){
+                guildConf[message.guild.id].links = false;
+                message.channel.send('Links disabled!');
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err);
+                });
+                talkedRecently.add(message.author.id);
+                setTimeout(() => {
+                    talkedRecently.delete(message.author.id);
+                }, cooldownTime);
+                return;
+            };
+            if (!guildConf[message.guild.id].links){
+                guildConf[message.guild.id].links = true;
+                message.channel.send('Links enabled!');
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err);
+                });
+                talkedRecently.add(message.author.id);
+                setTimeout(() => {
+                    talkedRecently.delete(message.author.id);
+                }, cooldownTime);
+                return;
+            };
+		
+		}
+    };
+
+    if (command === 'blacklist'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
             if (!args[0]){
                 message.channel.send('Available commands: `add`, `clear`, `list`');
             } else {
@@ -389,10 +407,12 @@ bot.on('message', (message) => {
                         } else {
                             var newBlacklist = message.content.replace(`${guildConf[message.guild.id].prefix}blacklist add `, '');
                             guildBlacklists[message.guild.id].blacklist.push(`${newBlacklist}`);
+                            let unique = [...new Set(guildBlacklists[message.guild.id].blacklist)];
+                            guildBlacklists[message.guild.id].blacklist = Array.from(unique);
                             fs.writeFile('./storages/guildBlacklists.json', JSON.stringify(guildBlacklists, null, 2), (err) => {
                                 if (err) console.log(err)
                             })
-                            message.channel.send(`Added ${newBlacklist} to the blacklist!`)
+                            message.channel.send(`Added ${newBlacklist} to the blacklist!`);
                         }
                     } else {
                         message.channel.send('You have to have `MANAGE_GUILD` permissions to use this command!')
@@ -406,146 +426,141 @@ bot.on('message', (message) => {
                     message.channel.send(blacklistEmbed)
                 } else if (args[0] === 'clear'){
                     if (message.member.hasPermission('MANAGE_GUILD')){
-                        delete guildBlacklists[message.guild.id]; // Deletes the Guild ID and Prefix
+                        delete guildBlacklists[message.guild.id];
                         fs.writeFile('./storages/guildBlacklists.json', JSON.stringify(guildBlacklists, null, 2), (err) => {
-                            if (err) console.log(err)
-                    })
-                        message.channel.send('Blacklist cleared!')
+                            if (err) console.log(err);
+						})
+                        message.channel.send('Blacklist cleared!');
                         
-                        if (!guildBlacklists[message.guild.id]) { // If the guild's id is not on the GUILDCONF File, proceed
+                        if (!guildBlacklists[message.guild.id]) {
                         guildBlacklists[message.guild.id] = {
                             blacklist: []
-                        }
-                        }
+                        };
+                        };
                          fs.writeFile('./storages/guildBlacklists.json', JSON.stringify(guildBlacklists, null, 2), (err) => {
-                             if (err) console.log(err)
-                        })
+                             if (err) console.log(err);
+                         });
                     } else {
-                        message.channel.send('You have to have `MANAGE_GUILD` permissions to use this command!')
-                    };
-                }
-            }
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            // Removes the user from the set after a minute
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-
-    }
-
-    if (command === 'help' || command === 'h'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-
-            if (!args[0]){
-                const helpEmbed = new Discord.MessageEmbed()
-                .setColor('#0099ff')
-                .setAuthor('Command list', bot.user.avatarURL())
-                .setDescription(`**Type \`${guildConf[message.guild.id].prefix}help <command>\` for more info about that command.**
-    
-[Add me to your server!](https://discordapp.com/oauth2/authorize?client_id=726065453591560262&scope=bot&permissions=8)
-[Join the Strawberry server!](https://discord.gg/kEnspZc) (updates, bug reports, support and more)`)
-                .addFields(
-                    { name: 'Random:', value: '\`coin\`, \`8ball\`, \`pp\`, \`number\`, \`test\`', inline: true },
-                    { name: 'Reddit:', value: '\`cat\`, \`dog\`, \`meme\`, \`anime\`, \`reddit\`', inline: true },
-                    { name: 'Fun:', value: '\`justgoogleit\`, \`jfgi\`, \`quiz\`, \`test\`, \`test\`', inline: true },
-                    { name: 'Test:', value: '\`test\`, \`test\`, \`test\`, \`test\`, \`test\`', inline: true },
-                    { name: 'NSFW:', value: '\`porn\`, \`hentai\`, \`test\`, \`test\`, \`test\`', inline: true },
-                    { name: 'Utility:', value: '\`prefix\`, \`purge\`, \`whois\`, \`serverinfo\`, \`test\`', inline: true },
-                    { name: 'Settings:', value: '\`blacklist\`, \`welcome\`, \`goodbye\`, \`test\`, \`test\`', inline: true },
-                )
-                .setFooter(`Bot created by 𝐙𝐞𝐫𝐨 𝐭𝐰𝐨#0265 | Currently in ${bot.guilds.cache.size} servers`);
-                message.channel.send(helpEmbed);
-            } else {
-                if (args[0] === 'coin'){
-    
-                } else if (args[0] === 'coin'){
-                    message.channel.send('**Coin command**\nFlips a coin. Duh')
-                } else if (args[0] === '8ball'){
-                    message.channel.send('**8ball command**\nGives you a random answer. Totaly reliable to make life decisions.')
-                } else if (args[0] === 'pp'){
-                    message.channel.send('**pp command**\nGives you a rand-- I mean accurate size of your pp.')
-                } else if (args[0] === 'number'){
-                    message.channel.send('**Number command**\nGives you a random number between 0 and <Args>.')
-                } else if (args[0] === 'cat' || args[0] === 'dog' || args[0] === 'meme' || args[0] === 'anime'){
-                    message.channel.send('**Cat, dog, meme, and anime commands**\nGives you a random reddit post from their respective subreddits.')
-                } else if (args[0] === 'reddit'){
-                    message.channel.send('**Reddit command**\nGives you a random pic from your mentioned subreddit!')
-                } else if (args[0] === 'hentai' || args[0] === 'porn'){
-                    message.channel.send('You know what this does. ( ͡° ͜ʖ ͡°)')
-                } else if (args[0] === 'prefix'){
-                    message.channel.send('**Prefix command**\nChanges the bot prefix.')
-                } else if (args[0] === 'purge'){
-                    message.channel.send('**Purge command**\nPurges 1-100 messages.')
-                } else if (args[0] === 'coin'){
-    
-                } else {
-                    message.channel.send('Invalid command!')
-                }
-            };
-            talkedRecently.add(message.author.id);
-            setTimeout(() => {
-            // Removes the user from the set after a minute
-            talkedRecently.delete(message.author.id);
-            }, 5000);
-        }
-    };
-
-    if (command === 'welcome'){
-        if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
-        } else {
-            if (!args[0]){
-                message.channel.send(`Invalid commands! Available commands: \`image\`, \`message\``);
-            } else if (args[0] === 'image'){
-                if (!args[1]){
-                    message.channel.send(`Invalid sub-commands! Available commands: \`view\`, \`edit\`, \`remove\``);
-                } else if (args[1] === 'view'){
-                    bot.emit('guildMemberAdd', message.member);
-                    message.react('✅');
-                } else if (args[1] === 'edit'){
-                    if (!args[2]){
-                        message.channel.send(`What do you want to edit? Available: \`color\`, \`image\``);
-                    } else if (args[2] === 'color'){
-                        // WORK IN PROGRESS
-                    } else if (args[2] === 'image'){
-
-                    }
-                }
-            } else if (args[0] === 'message'){
-                if (!args[1]){
-                    message.channel.send(`Invalid sub-commands! Available commands: \`view\`, \`edit\``);
-                } else if (args[1] === 'view'){
-                    message.channel.send(`**Join message:** \`${guildConf[message.guild.id].welcomeMessage}\``);
-                } else if (args[1] === 'edit'){
-                    if (!args[2]){
-                        message.channel.send('What do you want the new message to be? `You can use: {mention}, {server}, {discriminator}, {name}`');
-                    } else {
-                        let loc = message.content.replace(`${guildConf[message.guild.id].prefix}${command} ${args[0]} ${args[1]} `, '')
-                        guildConf[message.guild.id].welcomeMessage = loc;
-                        if (!guildConf[message.guild.id].welcomeMessage) {
-                            guildConf[message.guild.id].welcomeMessage = false; // If you didn't specify a Prefix, set the Prefix to the Default Prefix
-                        }
-                        fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
-                            if (err) console.log(err)
-                        })
-                        message.channel.send(`Welcome message set to \`${loc}\``);
+                        message.channel.send('You have to have `MANAGE_GUILD` permissions to use this command!');
                     };
                 };
             };
             talkedRecently.add(message.author.id);
             setTimeout(() => {
-            // Removes the user from the set after a minute
+				talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+        };
+    };
+
+    if (command === 'welcome'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            if (!args[0]){
+                message.channel.send(`Invalid commands! Available commands: \`edit\`, \`view\`, \`setchannel\`, \`removechannel\``);
+            } else if (args[0] === 'view'){
+                message.channel.send(`**Join message:** \`${guildConf[message.guild.id].welcomeMessage}\``);
+            } else if (args[0] === 'edit'){
+                if (!args[1]) return message.channel.send('What do you want the new message to be? `You can use: {mention}, {server}, {discriminator}, {name}`');
+                let loc = message.content.replace(`${guildConf[message.guild.id].prefix}${command} ${args[0]} `, '')
+                guildConf[message.guild.id].welcomeMessage = loc;
+                if (!guildConf[message.guild.id].welcomeMessage) {
+                    guildConf[message.guild.id].welcomeMessage = false;
+                };
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err)
+                })
+                message.channel.send(`Welcome message set to \`${loc}\``);
+            } else if (args[0] === 'setchannel'){
+                if (!args[1]){
+                    message.reply('please mention a channel!');
+                    return;
+                };
+                var channel = message.mentions.channels.first();
+
+                if (!channel) return message.channel.send('Please **mention** a channel!');
+
+                guildConf[message.guild.id].welcomeChannelID = channel.id;
+                if (!guildConf[message.guild.id].welcomeChannelID) {
+                    guildConf[message.guild.id].welcomeChannelID = false;
+                };
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err)
+                })
+                message.channel.send(`Channel set to ${channel}!`);
+            } else if (args[0] === 'removechannel'){
+                guildConf[message.guild.id].welcomeChannelID = false;
+                if (!guildConf[message.guild.id].welcomeChannelID) {
+                    guildConf[message.guild.id].welcomeChannelID = false;
+                };
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err)
+                })
+                message.channel.send(`Welcome messages removed.`);
+            };
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
+        }
+    };
+
+    if (command === 'goodbye'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            if (!args[0]){
+                message.channel.send(`Invalid commands! Available commands: \`edit\`, \`view\`, \`setchannel\`, \`removechannel\``);
+            } else if (args[0] === 'view'){
+                message.channel.send(`**Join message:** \`${guildConf[message.guild.id].goodbyeMessage}\``);
+            } else if (args[0] === 'edit'){
+                if (!args[1]) return message.channel.send('What do you want the new message to be? `You can use: {mention}, {server}, {discriminator}, {name}`');
+                let loc = message.content.replace(`${guildConf[message.guild.id].prefix}${command} ${args[0]} `, '')
+                guildConf[message.guild.id].goodbyeMessage = loc;
+                if (!guildConf[message.guild.id].goodbyeMessage) {
+                    guildConf[message.guild.id].goodbyeMessage = false;
+                };
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err)
+                })
+                message.channel.send(`Goodbye message set to \`${loc}\``);
+            } else if (args[0] === 'setchannel'){
+                if (!args[1]){
+                    message.reply('please mention a channel!');
+                    return;
+                };
+                var channel = message.mentions.channels.first();
+
+                if (!channel) return message.channel.send('Please **mention** a channel!');
+
+                guildConf[message.guild.id].goodbyeChannelID = channel.id;
+                if (!guildConf[message.guild.id].goodbyeChannelID) {
+                    guildConf[message.guild.id].goodbyeChannelID = false;
+                };
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err)
+                })
+                message.channel.send(`Channel set to ${channel}!`);
+            } else if (args[0] === 'removechannel'){
+                guildConf[message.guild.id].goodbyeChannelID = false;
+                if (!guildConf[message.guild.id].goodbyeChannelID) {
+                    guildConf[message.guild.id].goodbyeChannelID = false;
+                };
+                fs.writeFile('./storages/guildConf.json', JSON.stringify(guildConf, null, 2), (err) => {
+                    if (err) console.log(err)
+                })
+                message.channel.send(`Goodbye messages removed.`);
+            };
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+            talkedRecently.delete(message.author.id);
+            }, cooldownTime);
         }
     };
 
     if (command === 'jfgi' || command === 'justgoogleit'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
             if (!args[0]){
                 message.channel.send('What type of jfgi? (`normal` or `angry`)')
@@ -584,14 +599,14 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
 
     };
 
     if (command === 'purge' || command === 'clean' || command === 'clear'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
 
             if (message.member.hasPermission('MANAGE_MESSAGES')) {
@@ -625,13 +640,13 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
     };
 
     if (command === 'whois' || command === 'userinfo'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
 
             let user;
@@ -669,13 +684,13 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
     }
 
     if (command === 'serverinfo'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
 
             function checkDays(date) {
@@ -721,36 +736,63 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
     }
 
     if (command === `ping`){
-        const pingEmbed = new Discord.MessageEmbed()
-        .setTitle('Pong')
-        .setDescription("My ping is `" + `${Date.now() - message.createdTimestamp}` + " ms`")
-        .setColor('#0099ff')
-        .setFooter(`Bot created by 𝐙𝐞𝐫𝐨 𝐭𝐰𝐨#0265 | Currently in ${bot.guilds.cache.size} servers`);
-        message.channel.send(pingEmbed);
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            const pingEmbed = new Discord.MessageEmbed()
+            .setTitle('Pong')
+            .setDescription("My ping is `" + `${Date.now() - message.createdTimestamp}` + " ms`")
+            .setColor('#0099ff')
+            .setFooter(`Bot created by 𝐙𝐞𝐫𝐨 𝐭𝐰𝐨#0265 | Currently in ${bot.guilds.cache.size} servers`);
+            message.channel.send(pingEmbed);
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+            // Removes the user from the set after a minute
+            talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+        }
+
     };
 
     if (command === 'info'){
-        const infoEmbed = new Discord.MessageEmbed()
-        .setColor('#0099ff')
-        .setAuthor('Info', bot.user.avatarURL())
-        .setDescription(`**Ping:** ` + `${Date.now() - message.createdTimestamp}` + " ms" + `
-        
-:blue_book: **Version** - \`${botVersion}\`
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            const infoEmbed = new Discord.MessageEmbed()
+            .setColor('#0099ff')
+            .setAuthor('Info', bot.user.avatarURL())
+            .setDescription(`**Ping:** ` + `${Date.now() - message.createdTimestamp}` + " ms" + `
+ 
+📘 **Version** - \`${botVersion}\`
+
+📚 **Github** - [Click here](https://github.com/jameslinimk/Strawberry-bot/)
+
+⚠ **Report issues** - [Click here](https://github.com/jameslinimk/Strawberry-bot/issues/new)
+
+💡 **To-do** - [Click here](https://github.com/jameslinimk/Strawberry-bot/projects/1)
+
+🎉 **API Key** - [Click here ( Dev acces key )](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
 
 [Add me to your server!](https://discordapp.com/oauth2/authorize?client_id=726065453591560262&scope=bot&permissions=8)
 [Join the Strawberry server!](https://discord.gg/kEnspZc) (updates, bug reports, support and more)`)
-        .setFooter(`Bot created by 𝐙𝐞𝐫𝐨 𝐭𝐰𝐨#0265 | Currently in ${bot.guilds.cache.size} servers`);
-        message.channel.send(infoEmbed);
+            .setFooter(`Bot created by 𝐙𝐞𝐫𝐨 𝐭𝐰𝐨#0265 | Currently in ${bot.guilds.cache.size} servers`);
+            message.channel.send(infoEmbed);
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+            // Removes the user from the set after a minute
+            talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+        }
     };
-
+	
     if (command === '8ball'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
 
             let lmsgs = message.content.replace(`${guildConf[message.guild.id].prefix}8ball`, "")
@@ -793,14 +835,14 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
 
     };
 
     if (command === 'coin'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
             message.channel.send('🔁 Flipping...')
             let random = Math.floor(Math.random() * 105);
@@ -821,13 +863,13 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
     };
 
     if (command === 'pp'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
 
             message.channel.send('🔁 Calculing...')
@@ -837,13 +879,13 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
     };
 
     if (command === 'number'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
             if (!args[0]){
                 message.channel.send('What should the max number be?');
@@ -856,13 +898,13 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
     };
 
-    if (command === 'quiz' || command === 'trivia'){
+    if (command === 'quiz'){
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
 
             const item = quiz[Math.floor(Math.random() * quiz.length)];
@@ -892,13 +934,39 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
+    };
+
+    if (command === 'kill'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+            if (!args[0]){
+                message.channel.send('You were gonna kill yourself, but relized you needed to mention someone to kill them.');
+            } else {
+                var waysToKill = [
+                `${message.member} stabbed ${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')} with a rusty knife. ${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')}'s family had to pay for the tetanus fees too. Cold.`,
+                `${message.member} hired 69 assassins to kill ${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')}. Everyone died including all of the assassins.`,
+                `${message.member} was planning to kill ${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')} but got caught! While struggling with the police officer, the officer tried to shoot ${message.member}, but the bullet missed and hit ${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')} in china.`,
+                `${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')} heard ${message.member} was gonna kill them, and then hid. Little did he know he just trapped himslef in a room with 12 rabid dogs. You know what happened next.`,
+                `${message.member} shot and killed ${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')} with a bannana. The cops didnt know what happened.`,
+                `${message.member} hacked ${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')} to death. What?`,
+                `${message.member} bored ${msg.replace(`${guildConf[message.guild.id].prefix}kill `, '')} to death with math. What?`
+                ]
+                var randomAnswer = waysToKill[Math.floor(Math.random()*waysToKill.length)];
+                message.channel.send(randomAnswer);
+                talkedRecently.add(message.author.id);
+                setTimeout(() => {
+                    talkedRecently.delete(message.author.id);
+                }, cooldownTime);
+            };
+        };
     };
 
     if (command === "prefix") {
         if (talkedRecently.has(message.author.id)) {
-            message.channel.send("Wait 5 seconds before getting typing again. - " + `${message.member}`);
+            cooldownMessage(message.member);
         } else {
 
             if (message.member.hasPermission('MANAGE_GUILD')) {
@@ -921,8 +989,68 @@ bot.on('message', (message) => {
             setTimeout(() => {
             // Removes the user from the set after a minute
             talkedRecently.delete(message.author.id);
-            }, 5000);
+            }, cooldownTime);
         }
+    };
+	
+    if (command === 'cat' || command === 'dog' || command === 'memes' || command === 'cute' || command === 'porn' || command === 'hentai' || command === 'reddit' || command === 'anime'){
+        if (talkedRecently.has(message.author.id)) {
+            cooldownMessage(message.member);
+        } else {
+			if (command === 'cat') var reddits = ['cats', 'Catswhoyell', 'sleepingcats', 'CatPics', 'KittenGifs'];
+			if (command === 'dog') var reddits = ['Corgi', 'dogswithjobs', 'puppysmiles', 'dogs', 'dogpictures', 'dogtraining'];
+			if (command === 'memes') var reddits = ['wholesomememes', 'dankmemes', 'raimimemes', 'historymemes', 'memes', 'PrequelMemes'];
+			if (command === 'cute') var reddits = ['cute'];
+			if (command === 'porn') var reddits = ['porn', 'porno', 'blowjobs', 'MILF'];
+			if (command === 'hentai') var reddits = ['hentai'];
+			if (command === 'anime') var reddits = ['anime'];
+			if (command === 'reddit'){
+				if (args[0]){
+					var reddits = [`${args[0]}`];
+				} else {
+					message.channel.send('What subreddit?');
+				};
+			};
+			
+            const getReddit = await randomImageJs.getMemes({ 
+                get: 1, 
+                removeAllSubReddit: true, 
+                addSubReddit: reddits
+            }).catch(error => {
+				message.channel.send('Took too long! Please try again!');
+				return;
+            });
+            if (getReddit[0].NSFW && !message.channel.nsfw){
+				message.channel.send(':warning: The post is NSFW, but this channel isn\'t nsfw!');
+				message.channel.send('https://support.discord.com/hc/article_attachments/360007795191/2_.jpg');
+            } else {
+				const redditEmbed = new Discord.MessageEmbed()
+				.setTitle(`${getReddit[0].title}`)
+				.setURL(`${getReddit[0].postLink}`)
+				.setImage(`${getReddit[0].image}`)
+				.setColor('RANDOM')
+				.setFooter(`Sub: ${getReddit[0].subreddit} | NSFW: ${getReddit[0].NSFW}`);
+				message.channel.send(redditEmbed).catch((error) => {
+					message.channel.send('Error! Try again!');
+                });
+			};
+            talkedRecently.add(message.author.id);
+            setTimeout(() => {
+				talkedRecently.delete(message.author.id);
+            }, cooldownTime);
+        };
+    };
+
+    if (command === 'snipe'){
+        if (snipes[message.channel.id] ){
+            const snipeEmbed = new Discord.MessageEmbed()
+            .setTitle(`${message.channel.name} 's snipe`)
+            .setColor('RANDOM')
+            .setDescription(`${snipes[message.channel.id].content}\n\n**Author:** ${snipes[message.channel.id].author}`)
+            message.channel.send(snipeEmbed);
+        } else {
+            message.channel.send('Nothing to snipe!');
+        };
     };
 });
 
